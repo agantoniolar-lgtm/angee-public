@@ -1,0 +1,30 @@
+# Copy this file to .github/workflows/migrations-schema-only.yml at the project root
+# (create .github/workflows/ if it doesn't exist; merge in if other workflows already
+# exist there).
+#
+# This is the CI backstop, not a replacement for the local pre-commit hook — the hook
+# catches a migration that mixes schema and real-data changes before it's committed at
+# all; this catches anything that slipped past the hook (unhooked clone, --no-verify, a
+# direct push) and shows up as a visible pass/fail check on the PR, so it's something
+# reviewable without reading code.
+#
+# Requires Node (via actions/setup-node) since the check script itself is Node — no
+# other dependency. Assumes the script lives at its standard kit path,
+# .claude/skills/verify-rls/scripts/check-migrations-schema-only.mjs.
+
+name: migrations-schema-only
+
+on: [push, pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check new migrations are schema-only
+        run: node .claude/skills/verify-rls/scripts/check-migrations-schema-only.mjs --diff-against "${{ github.event.before }}"

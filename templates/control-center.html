@@ -1,0 +1,935 @@
+<title>Control Center</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap">
+<!--
+  control-center.html — the kit's control center page (T168).
+
+  A private claude.ai Artifact with the `db`, `user` and `comments` capabilities. It holds no
+  project data: everything it shows is read from the Artifact's database, written by the
+  Claude session and by this page.
+
+  Language: every visible text comes from STRINGS below (`en` and `es`). The page reads
+  `meta/project` = { name, lang } — `lang` defaults to `en`; a variant (es-MX, es, Spanish,
+  español, en-US…) maps to its table, and an unknown one falls back to English, said in the
+  console only. A failed read of meta/project is said in a banner.
+  This page is the kit's one exception to "the kit is English only": its language is asked
+  per project the first time the control center is created.
+
+  Schema: PAGE_SCHEMA below ('recorded-v1') says this page understands the `recorded` status.
+  Every publish of the page writes that value into `meta/project` (T189 U12), so the session
+  can tell a page that draws `recorded` cards as decided from an older one that would draw
+  them as waiting, and writes `recorded` only on the first kind. The page itself never reads
+  it back; it only sets it as `data-page-schema` on <html>.
+
+  Collections read: only these. Since T189 the page shows decisions alone: no tasks, no agent
+  reports, no load from the seed script.
+    decisions/<id>  status open | decided | recorded | upcoming. `recorded` is a decided card
+                    the session already wrote into the task log: drawn among the decided ones,
+                    never as waiting and never under Upcoming, and never written by this page.
+                    Before saving an answer the page reads the card again and writes only if it
+                    is still `open`; otherwise it writes nothing and tells the owner the card was
+                    already recorded. The live subscription asks only for `open`, `upcoming` and
+                    `decided` (a `where status in`): `recorded` cards are not loaded when the page
+                    opens. Each time the owner opens "Decided recently" the page reads the latest
+                    10 `recorded` cards once, ordered by `decidedAt` (never by `order`, which an old
+                    `legacy-pre-kit` card may lack), and shows them with the `decided` ones. Until
+                    that read comes back its heading shows no count; a failed read is said as an
+                    error, never as an empty list. "Upcoming" lists the `upcoming` cards of this
+                    collection and nothing else. `kind: "action"` is an owner's action
+                    (a command, a screen walk, a reading) with exact `steps`; anything else is
+                    a decision card. The page writes `status/choice/note/decidedAt`, and the
+                    drafts `draftChoice/draftNote/draftOther/draftAt` of a grouped decision;
+                    `draftAt` is the time of the last draft write, one for the whole doc.
+                    An open card starts from its draft only — never from an earlier `choice`
+                    — and a draft older than its `decidedAt` (a reopened card) is ignored.
+                    `logEntry` is written by the session, never by this page: the task-log
+                    entry that recorded the card's decision, or `legacy-pre-kit` on an old
+                    card of an adopted page, marked so it is never recorded. The page does
+                    not read it.
+    meta/project    { name, lang, … }: written by the session from `.ae-control-center` (see
+                    Language above), plus the PAGE_SCHEMA marker on every publish. Any other
+                    field is ignored.
+    meta/notify     { threadId }: the one comment thread every notice to Claude reuses.
+-->
+<style>
+  :root {
+    --bg: #F7F7F5;
+    --surface: #FFFFFF;
+    --ink: #1C1C1A;
+    --muted: #5F5E5A;
+    --line: #E3E2DE;
+    --line-strong: #C9C8C3;
+    --accent: #1F4FD1;
+    --accent-ink: #163A9E;
+    --accent-soft: #EAF0FD;
+    --accent-wash: #F5F8FF;
+    --on-accent: #FFFFFF;
+    --act: #6E3B00;
+    --act-bg: #FFF8EC;
+    --act-line: #F0D9B0;
+    --warn: #8A1F11;
+    --warn-soft: #FDECEA;
+    --sans: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #141413; --surface: #1D1D1B; --ink: #ECEBE7; --muted: #B0AEA6; --line: #34332F; --line-strong: #4A4944;
+      --accent: #8FA9FF; --accent-ink: #B9C9FF; --accent-soft: #1F2A45; --accent-wash: #1A2133; --on-accent: #10131C;
+      --act: #F2C27A; --act-bg: #2B2216; --act-line: #57452A; --warn: #FFB4A8; --warn-soft: #3A1D18;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #141413; --surface: #1D1D1B; --ink: #ECEBE7; --muted: #B0AEA6; --line: #34332F; --line-strong: #4A4944;
+    --accent: #8FA9FF; --accent-ink: #B9C9FF; --accent-soft: #1F2A45; --accent-wash: #1A2133; --on-accent: #10131C;
+    --act: #F2C27A; --act-bg: #2B2216; --act-line: #57452A; --warn: #FFB4A8; --warn-soft: #3A1D18;
+  }
+
+  * { box-sizing: border-box; }
+  /* `hidden` must win over any `display` below (section.view is flex): without it every view shows at once. */
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.45; }
+  a { color: var(--accent); }
+  code { font-family: var(--mono); font-size: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; overflow-wrap: anywhere; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 16px 48px; display: flex; flex-direction: column; gap: 24px; }
+  header { display: flex; flex-direction: column; gap: 16px; }
+  .topline { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; font-size: 14px; color: var(--muted); }
+  .eyebrow { letter-spacing: 0.02em; }
+  section.view { display: flex; flex-direction: column; gap: 24px; }
+  .block { display: flex; flex-direction: column; gap: 12px; }
+  h2 { margin: 0; font-size: 20px; }
+  h3 { margin: 0; font-size: 22px; line-height: 1.3; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 14px; color: var(--muted); }
+  .tag { background: var(--accent-soft); color: var(--accent-ink); padding: 2px 8px; border-radius: 6px; font-weight: 600; }
+  .question { margin: 0; }
+  ul.facts, ul.trail, ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+  ul.trail { color: var(--muted); }
+  fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+  .opt { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+  .opt.is-rec { border: 2px solid var(--accent); background: var(--accent-wash); }
+  .opt.is-other { border: 1px dashed var(--line-strong); }
+  .opt input[type="radio"] { margin-top: 4px; width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+  .opt-body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+  .opt-detail { color: var(--muted); }
+  .why { margin: 0; }
+  input[type="text"] { font: inherit; padding: 10px 12px; min-height: 44px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); background: var(--surface); width: 100%; }
+  details.how { border-top: 1px solid var(--line); padding-top: 12px; }
+  details.how summary, details.decided summary { font-weight: 600; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+  .trace { display: inline-block; margin-top: 8px; font-size: 14px; color: var(--muted); }
+  .submit { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .note { flex: 1 1 320px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+  .btn { font: inherit; font-weight: 600; padding: 12px 20px; min-height: 44px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); cursor: pointer; }
+  .btn[disabled] { opacity: .5; cursor: not-allowed; }
+  .btn.act { background: var(--surface); color: var(--act); border-color: var(--act); }
+  button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .status-msg { font-size: 14px; color: var(--muted); }
+  .group { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .group-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .group-title { font-size: 18px; font-weight: 600; }
+  .group-why { margin: 4px 0 0; color: var(--muted); }
+  .group-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .group .card { border-color: var(--line); padding: 20px; }
+  .action { background: var(--act-bg); border: 1px solid var(--act-line); border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px; }
+  .action .meta { color: var(--act); }
+  .action-title { font-size: 18px; font-weight: 600; }
+  .action code { border-color: var(--act-line); }
+  .rows { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  .row { display: flex; justify-content: space-between; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .row:last-child { border-bottom: 0; }
+  .row-side { color: var(--muted); font-size: 14px; }
+  .empty { background: var(--surface); border: 1px dashed var(--line-strong); border-radius: 12px; padding: 20px 24px; color: var(--muted); }
+  .banner { background: var(--warn-soft); color: var(--warn); border-radius: 12px; padding: 12px 16px; font-size: 14px; }
+  .empty.error { border-style: solid; background: var(--warn-soft); color: var(--warn); border-color: var(--warn-soft); }
+  .suspect { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 4px; background: var(--warn-soft); color: var(--warn); font-size: 13px; font-weight: 600; }
+  .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: calc(100% - 32px); background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 8px; font-size: 14px; z-index: 10; }
+  @media (max-width: 560px) {
+    .card, .group, .action { padding: 16px; }
+    .row { padding: 12px 16px; }
+    h3 { font-size: 20px; }
+  }
+</style>
+
+<div id="app"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // What this template understands: the `recorded` status (header, "Schema"). The session
+  // writes this value into meta/project on every publish; the page never reads it back.
+  const PAGE_SCHEMA = 'recorded-v1';
+
+  const own = (map, k) => (typeof k === 'string' && Object.prototype.hasOwnProperty.call(map, k) ? map[k] : null);
+
+  // ─── Texts: every visible word of the page, per language ───
+  const STRINGS = {
+    en: {
+      title: 'Control center',
+      eyebrow: '{name} · control center',
+      loading: 'Loading…',
+      noDb: 'This page cannot read its data. Open it from claude.ai with your account.',
+      lostConn: 'The connection to the data was lost ({code}). Reload the page.',
+      projectError: 'Could not read the project settings ({code}); the page shows in English and without the project name. Reload the page.',
+      waiting: 'Waiting on your word',
+      noDecisions: 'Nothing waits on you. Everything that depended on you is settled.',
+      klass: 'Class {k}',
+      opened: 'Open since {time}',
+      blocks: 'Blocks:', ifNot: 'If you don’t decide:',
+      options: 'Options', recommended: 'recommended',
+      other: 'Other', otherLabel: 'Your answer', otherPlaceholder: 'Write your answer',
+      whyRec: 'Why the recommended one:',
+      howHere: 'How we got here', fullTrace: 'Full trace: {ref}',
+      note: 'Note (optional)', notePlaceholder: 'Your reason, if you want to leave one',
+      register: 'Register decision',
+      groupEyebrow: 'Group of {n} · sent together',
+      groupProgress: '{a} of {n} answered',
+      sendN: 'Send the {n} to Claude', send1: 'Send to Claude',
+      draftSaved: 'Answer saved as a draft. It is sent with the group.',
+      draftPending: 'Sent together with the rest of the group.',
+      yourAction: 'Your action',
+      actCommand: 'Run a command', actWalk: 'Walk through a screen', actRead: 'Read a document', actOther: 'Something to do',
+      actDone: 'Done',
+      upcoming: 'Upcoming', noUpcoming: 'Nothing else is lined up for you.',
+      kindDecision: 'coming decision',
+      decidedHead: 'Decided recently ({n})', decidedHeadBare: 'Decided recently', youChose: 'You chose: {x}', didIt: 'Done',
+      historyEmpty: 'Nothing has been decided yet.',
+      historyError: 'Could not read the recorded decisions ({code}). Close and open this list to try again.',
+      suspect: 'suspicious time', suspectWhy: 'This time is in the future, so it was not written by the clock.',
+      suspectNoZone: 'This time does not say its time zone, so no clock wrote it.',
+      saving: 'Saving…', noPerm: 'You don’t have permission to register decisions on this page.',
+      saveFail: 'Could not save ({code}). Try again.', saveFailId: 'Could not save {id} ({code}). Try again.',
+      draftFail: 'Could not save the draft ({code}).',
+      groupPartial: 'Could not save {id} ({code}). Saved and sent: {saved}. Try again for the rest.',
+      alreadyRecorded: 'This card was already recorded, so your answer was not saved. To change it, ask Claude for a new card.',
+      alreadyRecordedId: '{id} was already recorded, so nothing in this group was saved. Reload the page to see it.',
+      alreadyRecordedPart: '{id} was already recorded and was not saved. Saved and sent: {saved}.',
+      choiceGone: 'The options changed while you were answering; choose again.',
+      toastSent: 'Saved and sent to Claude.',
+      toastIdle: 'Saved. Claude is not listening right now; it will see it on its next check.',
+      toastRate: 'Saved. Notices to Claude are paused for pace; it will see it on its next check.',
+      toastFail: 'Saved. Could not notify Claude ({code}); it will see it on its next check.',
+      toastNoChannel: 'Saved, but Claude was not notified: the notice channel did not load ({code}). It will see it on its next check.',
+      noticeOne: 'Decision registered in the control center — {id} ({title}): {choice}.{note} Read the decisions collection and continue what it unblocks.',
+      noticeGroup: 'Group of decisions registered in the control center — {title} ({n}): {lines}. Read the decisions collection and continue what it unblocks.',
+      noticeNote: ' Note: {note}'
+    },
+    es: {
+      title: 'Centro de control',
+      eyebrow: '{name} · centro de control',
+      loading: 'Cargando…',
+      noDb: 'Esta página no puede leer sus datos. Ábrela desde claude.ai con tu cuenta.',
+      lostConn: 'Se perdió la conexión con los datos ({code}). Recarga la página.',
+      projectError: 'No se pudo leer la configuración del proyecto ({code}); la página sale en inglés y sin el nombre del proyecto. Recarga la página.',
+      waiting: 'Esperan tu palabra',
+      noDecisions: 'Nada espera tu palabra. Todo lo que dependía de ti está resuelto.',
+      klass: 'Clase {k}',
+      opened: 'Abierta desde {time}',
+      blocks: 'Bloquea:', ifNot: 'Si no decides:',
+      options: 'Opciones', recommended: 'recomendada',
+      other: 'Otra', otherLabel: 'Tu respuesta', otherPlaceholder: 'Escribe tu respuesta',
+      whyRec: 'Por qué la recomendada:',
+      howHere: 'Cómo se llegó aquí', fullTrace: 'Traza completa: {ref}',
+      note: 'Nota (opcional)', notePlaceholder: 'Tu razón, si quieres dejarla',
+      register: 'Registrar decisión',
+      groupEyebrow: 'Grupo de {n} · se envían juntas',
+      groupProgress: '{a} de {n} respondidas',
+      sendN: 'Enviar las {n} a Claude', send1: 'Enviar a Claude',
+      draftSaved: 'Respuesta guardada como borrador. Se envía con el grupo.',
+      draftPending: 'Se envía junto con el resto del grupo.',
+      yourAction: 'Acción tuya',
+      actCommand: 'Correr un comando', actWalk: 'Recorrer una pantalla', actRead: 'Leer un documento', actOther: 'Algo por hacer',
+      actDone: 'Ya lo hice',
+      upcoming: 'Próximas', noUpcoming: 'Nada más en fila para ti.',
+      kindDecision: 'decisión próxima',
+      decidedHead: 'Decididas recientemente ({n})', decidedHeadBare: 'Decididas recientemente', youChose: 'Elegiste: {x}', didIt: 'Hecha',
+      historyEmpty: 'Todavía no hay nada decidido.',
+      historyError: 'No se pudieron leer las decisiones registradas ({code}). Cierra y abre esta lista para intentarlo de nuevo.',
+      suspect: 'hora sospechosa', suspectWhy: 'Esta hora cae en el futuro: no la escribió el reloj.',
+      suspectNoZone: 'Esta hora no dice su zona horaria: no la escribió un reloj.',
+      saving: 'Guardando…', noPerm: 'No tienes permiso para registrar decisiones en esta página.',
+      saveFail: 'No se pudo guardar ({code}). Intenta de nuevo.', saveFailId: 'No se pudo guardar {id} ({code}). Intenta de nuevo.',
+      draftFail: 'No se pudo guardar el borrador ({code}).',
+      groupPartial: 'No se pudo guardar {id} ({code}). Guardadas y enviadas: {saved}. Intenta de nuevo con el resto.',
+      alreadyRecorded: 'Esta tarjeta ya estaba registrada, así que tu respuesta no se guardó. Para cambiarla, pídele a Claude una tarjeta nueva.',
+      alreadyRecordedId: '{id} ya estaba registrada, así que no se guardó nada de este grupo. Recarga la página para verla.',
+      alreadyRecordedPart: '{id} ya estaba registrada y no se guardó. Guardadas y enviadas: {saved}.',
+      choiceGone: 'Las opciones cambiaron mientras respondías; elige de nuevo.',
+      toastSent: 'Guardado y enviado a Claude.',
+      toastIdle: 'Guardado. Claude no está escuchando ahora; lo verá en su siguiente revisión.',
+      toastRate: 'Guardado. Aviso a Claude en pausa por ritmo; lo verá en su siguiente revisión.',
+      toastFail: 'Guardado. No se pudo avisar a Claude ({code}); lo verá en su siguiente revisión.',
+      toastNoChannel: 'Guardado, pero no se avisó a Claude: el canal de avisos no cargó ({code}). Lo verá en su siguiente revisión.',
+      noticeOne: 'Decisión registrada en el control center — {id} ({title}): {choice}.{note} Lee la colección decisions y continúa lo que desbloquea.',
+      noticeGroup: 'Grupo de decisiones registrado en el control center — {title} ({n}): {lines}. Lee la colección decisions y continúa lo que desbloquea.',
+      noticeNote: ' Nota: {note}'
+    }
+  };
+  const LOCALES = { en: 'en-US', es: 'es-MX' };
+
+  // ─── State ───
+  let lang = 'en';
+  let project = {};
+  let decisions = [];
+  let projectError = null;
+  let db = null, comments = null, commentsError = null, commentsP = null, readOnly = false;
+  let loadError = null;
+  // The live subscription leaves `recorded` cards out; the history reads them on demand.
+  const LIVE_STATUSES = ['open', 'upcoming', 'decided'];
+  const HISTORY_SHOWN = 10;
+  let history = { state: 'idle', docs: [], code: null }; // idle | loading | ok | error
+  let historySeq = 0;
+  const drafts = {};
+  const groupUi = {};
+
+  // `meta/project.lang` may arrive as a variant: es-MX, es, Spanish, español, en-US… Each maps
+  // to one of the two tables; anything else falls back to English and says so in the console
+  // only (the owner sees the page, not a warning about it). Read as own keys only, so a value
+  // like `constructor` never reaches the tables or Intl.
+  const LANG_ALIASES = { es: 'es', spanish: 'es', 'español': 'es', espanol: 'es', castellano: 'es', en: 'en', english: 'en', 'inglés': 'en', ingles: 'en' };
+  let warnedLang = null;
+  function normLang(v) {
+    if (v == null || v === '') return 'en';
+    const s = typeof v === 'string' ? v.trim().toLowerCase().replace(/_/g, '-') : '';
+    const base = s.split('-')[0];
+    const hit = own(LANG_ALIASES, s) || own(LANG_ALIASES, base);
+    if (hit) return hit;
+    if (warnedLang !== String(v)) { warnedLang = String(v); try { console.warn('control center: unknown language "' + String(v) + '"; showing English.'); } catch (e) {} }
+    return 'en';
+  }
+
+  function t(key, vars) {
+    const table = STRINGS[lang] || STRINGS.en;
+    let s = table[key] != null ? table[key] : (STRINGS.en[key] != null ? STRINGS.en[key] : key);
+    if (vars) s = s.replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? String(vars[k]) : m));
+    return s;
+  }
+
+  // ─── DOM helpers ───
+  const PROPS = { checked: 1, disabled: 1, value: 1, hidden: 1, open: 1 };
+  function el(tag, attrs) {
+    const n = document.createElement(tag);
+    if (attrs) for (const k of Object.keys(attrs)) {
+      const v = attrs[k];
+      if (v == null || v === false) continue;
+      if (k === 'class') n.className = v;
+      else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2), v);
+      else if (PROPS[k]) n[k] = v;
+      else n.setAttribute(k, v === true ? '' : String(v));
+    }
+    const kids = Array.prototype.slice.call(arguments, 2);
+    appendKids(n, kids);
+    return n;
+  }
+  function appendKids(n, kids) {
+    for (const k of kids) {
+      if (k == null || k === false) continue;
+      if (Array.isArray(k)) appendKids(n, k);
+      else n.append(k.nodeType ? k : document.createTextNode(String(k)));
+    }
+  }
+  // replaceChildren without the browser's habit of printing a null as "null".
+  function put(parent) {
+    const kids = []; (function flat(a) { for (const k of a) { if (k == null || k === false || k === '') continue; if (Array.isArray(k)) flat(k); else kids.push(k); } })(Array.prototype.slice.call(arguments, 1));
+    parent.replaceChildren.apply(parent, kids);
+  }
+  // `text with code` → text and <code>, so a command in a step is shown as one.
+  function rich(s) {
+    return String(s).split(/(`[^`]+`)/).filter(Boolean).map(p => p[0] === '`' && p.length > 2 ? el('code', null, p.slice(1, -1)) : p);
+  }
+  // A list field that arrives as a string (seen in an installed project) is read one item per line.
+  function asList(v) {
+    if (Array.isArray(v)) return v.filter(x => x != null && String(x).trim() !== '').map(String);
+    if (typeof v === 'string') return v.split(/\r?\n/).map(s => s.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean);
+    return [];
+  }
+  function asOptions(v) {
+    if (!Array.isArray(v)) return [];
+    return v.filter(o => o && typeof o === 'object' && o.id != null && o.id !== 'other');
+  }
+
+  // ─── Time: shown in the page's language; a time no clock wrote is marked as suspicious ───
+  // Every time the session and this page write names its zone. So the rule, the same for
+  // every time on the page (open, upcoming and decided cards):
+  //   - a time ahead of this clock by more than SKEW_MS (2 minutes, for two clocks that
+  //     disagree a little) is suspicious: no clock wrote it;
+  //   - a time with no zone — a bare date included — is suspicious wherever it falls: the
+  //     script did not write it, and a time typed by hand is the one that once landed in the
+  //     future (T116). There is no tolerance for another zone.
+  const SKEW_MS = 2 * 60000;
+  function parseTime(v) {
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') return Number.isFinite(v) ? { ms: v, dateOnly: false, zoned: true } : null;
+    const s = String(v).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const [y, m, d] = s.split('-').map(Number);
+      return { ms: new Date(y, m - 1, d).getTime(), dateOnly: true, zoned: false };
+    }
+    const ms = Date.parse(s);
+    return Number.isNaN(ms) ? null : { ms, dateOnly: false, zoned: /(?:Z|[+-]\d{2}:?\d{2})$/i.test(s) };
+  }
+  function isFuture(p) {
+    const now = Date.now();
+    if (p.dateOnly) { const d = new Date(now); return p.ms > new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+    return p.ms > now + SKEW_MS;
+  }
+  // Why a time is suspicious: 'future', 'zoneless', or null when it is not.
+  function suspicion(p) { return isFuture(p) ? 'future' : p.zoned ? null : 'zoneless'; }
+  // A time ahead of the clock within SKEW_MS reads as "now", not "in 1 minute".
+  function relative(p) {
+    const rtf = new Intl.RelativeTimeFormat(LOCALES[lang], { numeric: 'auto' });
+    const ahead = !isFuture(p);
+    if (p.dateOnly) {
+      const d = new Date(); const today = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      return rtf.format(ahead && p.ms > today ? 0 : Math.round((p.ms - today) / 86400000), 'day');
+    }
+    const diff = ahead ? Math.min(0, (p.ms - Date.now()) / 1000) : (p.ms - Date.now()) / 1000;
+    const a = Math.abs(diff);
+    if (a < 60) return rtf.format(0, 'minute');
+    if (a < 3600) return rtf.format(Math.round(diff / 60), 'minute');
+    if (a < 86400) return rtf.format(Math.round(diff / 3600), 'hour');
+    return rtf.format(Math.round(diff / 86400), 'day');
+  }
+  function absolute(p) {
+    const o = p.dateOnly ? { dateStyle: 'medium' } : { dateStyle: 'medium', timeStyle: 'short' };
+    try { return new Date(p.ms).toLocaleString(LOCALES[lang], o); } catch (e) { return new Date(p.ms).toISOString(); }
+  }
+  // Returns a <time> (relative, with the absolute one as its title), plus the marker when it is suspicious.
+  function timeEl(v, mode) {
+    const p = parseTime(v);
+    if (!p) return null;
+    const text = mode === 'absolute' ? absolute(p) : relative(p);
+    const out = el('span', null, el('time', { datetime: new Date(p.ms).toISOString(), title: absolute(p) }, text));
+    const why = suspicion(p);
+    if (why) out.append(el('span', { class: 'suspect', title: t(why === 'future' ? 'suspectWhy' : 'suspectNoZone') }, t('suspect')));
+    return out;
+  }
+  function fill(key, slot, node) {
+    const parts = t(key).split('{' + slot + '}');
+    return [parts[0], node, parts.slice(1).join('{' + slot + '}')];
+  }
+
+  // ─── Writing, and telling the watching Claude session ───
+  let toastEl = null, toastTimer = null;
+  function toast(text) {
+    if (!toastEl) { toastEl = el('div', { class: 'toast', role: 'status', hidden: true }); document.body.append(toastEl); }
+    toastEl.textContent = text; toastEl.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { toastEl.hidden = true; }, 5000);
+  }
+
+  // An answer is written only onto a card that is still `open`. A tab can draw a card as open
+  // after the session recorded it (`recorded`, or `decided` with its answer): the latest
+  // snapshot is checked first, then the card is read again just before the write. The db has
+  // no conditional write, so this narrows the window; it cannot close it.
+  // Returns null when still open, ALREADY when not, or the read's error code.
+  const ALREADY = 'already_recorded';
+  async function stillOpen(id) {
+    const seen = decisions.find(x => x.id === id);
+    if (seen && seen.status !== 'open') return ALREADY;
+    try {
+      const s = await db.doc('decisions/' + id).get();
+      return s.exists && (s.data() || {}).status === 'open' ? null : ALREADY;
+    } catch (e) { return (e && e.code) || 'error'; }
+  }
+  // Returns null when saved, or the error code. A permission error turns the page read-only.
+  async function write(id, patch) {
+    if (!db) return 'no_db';
+    const gone = await stillOpen(id);
+    if (gone) return gone;
+    try { await db.doc('decisions/' + id).update(patch); return null; }
+    catch (e) {
+      const code = (e && e.code) || 'error';
+      if (code === 'invalid_argument') readOnly = true;
+      return code;
+    }
+  }
+  function failText(code, id) {
+    if (code === ALREADY) return t('alreadyRecorded');
+    if (code === 'invalid_argument') return t('noPerm');
+    return id ? t('saveFailId', { id, code }) : t('saveFail', { code });
+  }
+  async function saveDraft(id, patch) {
+    if (!db || readOnly) return;
+    try { await db.doc('decisions/' + id).update(Object.assign({}, patch, { draftAt: new Date().toISOString() })); } catch (e) { toast(t('draftFail', { code: (e && e.code) || 'error' })); }
+  }
+
+  // The anchor is taken inside the owner's click (`comments.anchorFor`, before any await);
+  // the notice itself goes only after the decision was saved.
+  function anchorIn(btn) { try { return comments ? comments.anchorFor(btn) : null; } catch (e) { return null; } }
+  // Never says only "Saved" when Claude was not told: a channel that did not load (or was
+  // refused) is said to the owner, with its code. Nothing in here can reject.
+  const COMMENTS_WAIT_MS = 5000;
+  async function sendNotice(text, anchorP) {
+    try {
+      if (!comments && commentsP) {
+        await Promise.race([commentsP, new Promise(r => setTimeout(r, COMMENTS_WAIT_MS))]);
+        if (!comments && !commentsError) commentsError = 'timeout';
+      }
+      if (!comments) { toast(t('toastNoChannel', { code: commentsError || 'unavailable' })); return; }
+      if (anchorP == null) anchorP = Promise.resolve(null);
+      const state = await comments.canSendToClaude();
+      if (state !== 'available') { toast(t('toastIdle')); return; }
+      let threadId = null;
+      try { const s = await db.doc('meta/notify').get(); threadId = s.exists ? s.data().threadId : null; } catch (e) {}
+      let res;
+      try {
+        res = threadId ? await comments.sendToClaude({ threadId, text }) : await comments.sendToClaude({ anchor: await anchorP, text });
+      } catch (e) {
+        if (e && e.code === 'not_found' && threadId) res = await comments.sendToClaude({ anchor: await anchorP, text });
+        else throw e;
+      }
+      if (res && res.threadId && res.threadId !== threadId) { try { await db.doc('meta/notify').set({ threadId: res.threadId }); } catch (e) {} }
+      toast(t('toastSent'));
+    } catch (e) {
+      const code = e && e.code;
+      try { toast(code === 'rate_limited' ? t('toastRate') : t('toastFail', { code: code || 'error' })); } catch (e2) {}
+    }
+  }
+
+  // ─── Answers: a choice, plus the "Other" text, plus an optional note ───
+  // Only what the owner gave on this page counts: an open card starts from its draft, never
+  // from an earlier `choice` (a reopened decision keeps its old one), and a draft older than
+  // the card's last `decidedAt` belongs to the round before the reopening and is ignored.
+  // A cached choice whose option no longer exists on the card is cleared: it is not an answer.
+  function liveDraft(d) {
+    const dec = parseTime(d.decidedAt);
+    if (!dec) return true;
+    const at = parseTime(d.draftAt);
+    return !!(at && at.ms > dec.ms);
+  }
+  function draftOf(d) {
+    if (!drafts[d.id]) {
+      const live = liveDraft(d);
+      drafts[d.id] = {
+        choice: live && d.draftChoice != null && d.draftChoice !== '' ? d.draftChoice : null,
+        other: live && typeof d.draftOther === 'string' ? d.draftOther : '',
+        note: live && typeof d.draftNote === 'string' ? d.draftNote : ''
+      };
+    }
+    const dr = drafts[d.id];
+    if (dr.choice && dr.choice !== 'other' && d.kind !== 'action' && !asOptions(d.options).some(o => o.id === dr.choice)) dr.choice = null;
+    return dr;
+  }
+  function answered(dr) { return !!dr.choice && (dr.choice !== 'other' || dr.other.trim() !== ''); }
+  function answerNote(dr) {
+    return dr.choice === 'other' ? [dr.other.trim(), dr.note.trim()].filter(Boolean).join(' — ') : dr.note.trim();
+  }
+  function choiceLabel(d, choice) {
+    if (choice === 'other') return t('other');
+    if (d.kind === 'action' && choice === 'done') return t('didIt');
+    const o = asOptions(d.options).find(x => x.id === choice);
+    return o ? o.label : String(choice || '—');
+  }
+
+  // ─── Decisions view ───
+  // A snapshot never rebuilds a card the owner is typing in. Cards are kept by id and rebuilt
+  // only when their own data changed; one that changed while it holds the focus (or an IME
+  // composition) keeps its current element until the focus leaves it. Messages, saving state
+  // and which <details> are open live in state, so a rebuilt card shows them again.
+  const cardCache = new Map();   // key → { node, sig }
+  const ui = {};                 // key → { refresh }
+  const msgs = {};               // key → text shown under the card or group
+  const saving = {};             // key → true while its write is in flight
+  const openDetails = new Set(); // keys of <details> the owner opened
+  let composing = false;
+  let focusOverride = null;      // during focusout: where the focus is going
+  let deferred = false;
+
+  function focusIn(node) {
+    const f = focusOverride !== null ? focusOverride : document.activeElement;
+    return !!(f && f !== document.body && node.contains(f));
+  }
+  function held(node) { return focusIn(node) || (composing && node.contains(document.activeElement)); }
+  const DRAFT_FIELDS = { draftChoice: 1, draftNote: 1, draftOther: 1, draftAt: 1, syncedAt: 1 };
+  function sigOf(v) { return JSON.stringify([lang, readOnly, v], (k, x) => (DRAFT_FIELDS[k] ? undefined : x)); }
+  function cached(key, value, build) {
+    const sig = sigOf(value);
+    const c = cardCache.get(key);
+    if (c && c.sig === sig) return c.node;
+    if (c && held(c.node)) { deferred = true; return c.node; }
+    const node = build();
+    cardCache.set(key, { node, sig });
+    return node;
+  }
+  // Puts `nodes` as the children of `parent`, touching only what changed, so a kept node is
+  // never detached (detaching a focused field blurs it).
+  function reconcile(parent, nodes) {
+    nodes = nodes.filter(n => n != null && n !== false);
+    const keep = new Set(nodes);
+    Array.prototype.slice.call(parent.childNodes).forEach(c => { if (!keep.has(c)) parent.removeChild(c); });
+    nodes.forEach((n, i) => { if (parent.childNodes[i] !== n) parent.insertBefore(n, parent.childNodes[i] || null); });
+  }
+  function details(key, cls, summary, kids) {
+    const d = el('details', { class: cls, open: openDetails.has(key) }, el('summary', null, summary), kids);
+    d.addEventListener('toggle', () => { if (d.open) openDetails.add(key); else openDetails.delete(key); });
+    return d;
+  }
+  function setMsg(key, text) { msgs[key] = text; if (ui[key]) ui[key].refresh(); }
+
+  function decisionCard(d) {
+    const key = d.id;
+    const opts = asOptions(d.options);
+    const dr = draftOf(d);
+    const grouped = !!d.group;
+    const msg = el('span', { class: 'status-msg', role: 'status' });
+    const btn = el('button', { type: 'button', class: 'btn' }, t('register'));
+    const hint = el('span', { class: 'status-msg' });
+    const refresh = () => {
+      btn.disabled = readOnly || !!saving[key] || !answered(dr);
+      msg.textContent = msgs[key] || '';
+      hint.textContent = answered(dr) ? t('draftSaved') : t('draftPending');
+    };
+    const changed = () => { if (msgs[key] === t('choiceGone')) msgs[key] = ''; refresh(); if (grouped) refreshGroup(d.group); };
+    ui[key] = { refresh };
+    const name = 'opt-' + d.id;
+
+    const optionEls = opts.map(o => {
+      const id = name + '-' + o.id;
+      return el('label', { class: 'opt' + (o.recommended ? ' is-rec' : ''), for: id },
+        el('input', { type: 'radio', name, id, value: String(o.id), checked: dr.choice === o.id,
+          onchange: () => { dr.choice = o.id; changed(); if (grouped) saveDraft(d.id, { draftChoice: o.id }); } }),
+        el('span', { class: 'opt-body' },
+          el('span', null, el('b', null, o.label || String(o.id)), o.recommended ? ' · ' + t('recommended') : null),
+          o.detail ? el('span', { class: 'opt-detail' }, o.detail) : null));
+    });
+    const otherId = name + '-other';
+    const otherRadio = el('input', { type: 'radio', name, id: otherId, value: 'other', checked: dr.choice === 'other',
+      onchange: () => { dr.choice = 'other'; changed(); if (grouped) saveDraft(d.id, { draftChoice: 'other' }); } });
+    const otherInput = el('input', { type: 'text', id: otherId + '-text', placeholder: t('otherPlaceholder'), 'aria-label': t('otherLabel'), value: dr.other,
+      oninput: e => { dr.other = e.target.value; if (dr.other.trim() && dr.choice !== 'other') { dr.choice = 'other'; otherRadio.checked = true; } changed(); },
+      onchange: e => { if (grouped) saveDraft(d.id, { draftChoice: dr.choice, draftOther: e.target.value.trim() }); } });
+    optionEls.push(el('label', { class: 'opt is-other', for: otherId }, otherRadio,
+      el('span', { class: 'opt-body' }, el('b', null, t('other')), otherInput)));
+
+    const facts = [];
+    if (d.blocks) facts.push(el('li', null, el('b', null, t('blocks')), ' ', d.blocks));
+    if (d.ifNotDecided) facts.push(el('li', null, el('b', null, t('ifNot')), ' ', d.ifNotDecided));
+    asList(d.context).forEach(c => facts.push(el('li', null, rich(c))));
+
+    const trail = asList(d.howWeGotHere).slice(0, 5);
+    const how = trail.length || d.traceRef ? details('how:' + d.id, 'how', t('howHere'), [
+      trail.length ? el('ul', { class: 'trail' }, trail.map(x => el('li', null, rich(x)))) : null,
+      d.traceRef ? (/^https?:\/\//.test(d.traceRef)
+        ? el('a', { class: 'trace', href: d.traceRef, target: '_blank', rel: 'noopener' }, t('fullTrace', { ref: d.traceRef }))
+        : el('span', { class: 'trace' }, fill('fullTrace', 'ref', el('code', null, d.traceRef)))) : null]) : null;
+
+    const noteId = 'note-' + d.id;
+    const noteInput = el('input', { type: 'text', id: noteId, placeholder: t('notePlaceholder'), value: dr.note,
+      oninput: e => { dr.note = e.target.value; },
+      onchange: e => { if (grouped) saveDraft(d.id, { draftNote: e.target.value.trim() }); } });
+
+    btn.addEventListener('click', async () => {
+      if (!answered(dr) || readOnly || saving[key]) return;
+      // The options may have changed since this card was drawn (it waits while it holds the
+      // focus): check the choice against the card as it is now, as the group button does.
+      const now = decisions.find(x => x.id === d.id) || d;
+      if (dr.choice !== 'other' && !asOptions(now.options).some(o => o.id === dr.choice)) {
+        dr.choice = null; msgs[key] = t('choiceGone'); refresh();
+        try { btn.blur(); } catch (e) {}
+        render(); // the card is drawn again with the options as they are now
+        return;
+      }
+      const anchorP = anchorIn(btn); // inside the owner's gesture
+      const note = answerNote(dr);
+      const choice = dr.choice;
+      saving[key] = true; setMsg(key, t('saving'));
+      const code = await write(d.id, { status: 'decided', choice, note, decidedAt: new Date().toISOString() });
+      saving[key] = false;
+      if (code) { setMsg(key, failText(code)); if (code === ALREADY) toast(t('alreadyRecorded')); if (readOnly) render(); return; }
+      setMsg(key, '');
+      sendNotice(t('noticeOne', { id: d.id, title: d.title || d.question || '', choice: choiceLabel(d, choice), note: note ? t('noticeNote', { note }) : '' }), anchorP);
+    });
+
+    const head = el('div', { class: 'meta' },
+      d.task ? el('span', { class: 'tag' }, d.unit ? d.task + ' · ' + d.unit : d.task) : null,
+      d.klass ? el('span', null, t('klass', { k: d.klass })) : null,
+      d.createdAt ? el('span', null, fill('opened', 'time', timeEl(d.createdAt))) : null);
+
+    refresh();
+    return el('article', { class: 'card decision', 'data-id': d.id },
+      head,
+      el('h3', null, d.title || d.question || d.id),
+      d.title && d.question ? el('p', { class: 'question' }, d.question) : null,
+      facts.length ? el('ul', { class: 'facts' }, facts) : null,
+      el('fieldset', null, el('legend', null, t('options')), optionEls),
+      d.recommendationWhy ? el('p', { class: 'why' }, el('b', null, t('whyRec')), ' ', d.recommendationWhy) : null,
+      how,
+      el('div', { class: 'submit' },
+        el('label', { class: 'note', for: noteId }, t('note'), noteInput),
+        grouped ? hint : btn,
+        msg));
+  }
+
+  function openMembers(g) { return decisions.filter(x => x.group === g && x.status === 'open' && x.kind !== 'action'); }
+  function refreshGroup(g) { const u = ui['g:' + g]; if (u) u.refresh(); }
+  function groupBlock(g, members) {
+    const key = 'g:' + g;
+    const first = members[0];
+    const msg = el('span', { class: 'status-msg', role: 'status' });
+    const progress = el('span', { class: 'status-msg' });
+    const btn = el('button', { type: 'button', class: 'btn group-send' }, t('send1'));
+    const list = el('div', { class: 'group-members' });
+    ui[key] = { refresh: () => {
+      const open = openMembers(g);
+      const a = open.filter(m => answered(draftOf(m))).length;
+      progress.textContent = t('groupProgress', { a, n: open.length });
+      btn.disabled = readOnly || !!saving[key] || open.length === 0 || a < open.length;
+      btn.textContent = open.length === 1 ? t('send1') : t('sendN', { n: open.length });
+      msg.textContent = msgs[key] || '';
+    } };
+    btn.addEventListener('click', async () => {
+      const open = openMembers(g);
+      if (readOnly || saving[key] || !open.length || open.some(m => !answered(draftOf(m)))) return;
+      const anchorP = anchorIn(btn); // inside the owner's gesture
+      saving[key] = true; setMsg(key, t('saving'));
+      // Every member is checked before any is written: a group is answered together, and one
+      // member already recorded means the page drew a group that no longer stands.
+      for (const m of open) {
+        const gone = await stillOpen(m.id);
+        if (!gone) continue;
+        saving[key] = false;
+        const text = gone === ALREADY ? t('alreadyRecordedId', { id: m.id }) : t('saveFailId', { id: m.id, code: gone });
+        setMsg(key, text); if (gone === ALREADY) toast(text);
+        return;
+      }
+      const at = new Date().toISOString();
+      const saved = [];
+      let failed = null;
+      for (const m of open) {
+        const dr = draftOf(m);
+        const code = await write(m.id, { status: 'decided', choice: dr.choice, note: answerNote(dr), decidedAt: at });
+        if (code) { failed = { id: m.id, code }; break; }
+        saved.push({ m, line: m.id + ' (' + (m.title || m.question || '') + '): ' + choiceLabel(m, dr.choice) + (answerNote(dr) ? t('noticeNote', { note: answerNote(dr) }) : '') });
+      }
+      saving[key] = false;
+      if (failed) setMsg(key, failed.code === 'invalid_argument' ? t('noPerm')
+        : failed.code === ALREADY ? (saved.length ? t('alreadyRecordedPart', { id: failed.id, saved: saved.map(s => s.m.id).join(', ') }) : t('alreadyRecordedId', { id: failed.id }))
+        : saved.length ? t('groupPartial', { id: failed.id, code: failed.code, saved: saved.map(s => s.m.id).join(', ') })
+        : t('saveFailId', { id: failed.id, code: failed.code }));
+      else setMsg(key, '');
+      if (failed && failed.code === ALREADY) toast(msgs[key]);
+      if (saved.length) sendNotice(t('noticeGroup', { title: first.groupTitle || g, n: saved.length, lines: saved.map(s => s.line).join(' | ') }), anchorP);
+      if (readOnly) render();
+    });
+    const block = el('section', { class: 'group', 'data-group': g },
+      el('div', { class: 'group-head' },
+        el('div', null,
+          el('div', { class: 'meta' }, first.task ? el('span', { class: 'tag' }, first.task) : null, el('span', null, t('groupEyebrow', { n: members.length }))),
+          el('div', { class: 'group-title' }, first.groupTitle || g),
+          first.groupWhy ? el('p', { class: 'group-why' }, first.groupWhy) : null),
+        el('div', { class: 'group-actions' }, progress, btn, msg)),
+      list);
+    block.__members = list;
+    return block;
+  }
+
+  const ACTION_KIND = { command: 'actCommand', walk: 'actWalk', read: 'actRead' };
+  function actionCard(d) {
+    const key = d.id;
+    const msg = el('span', { class: 'status-msg', role: 'status' });
+    const btn = el('button', { type: 'button', class: 'btn act' }, t('actDone'));
+    ui[key] = { refresh: () => { btn.disabled = readOnly || !!saving[key]; msg.textContent = msgs[key] || ''; } };
+    btn.addEventListener('click', async () => {
+      if (readOnly || saving[key]) return;
+      const anchorP = anchorIn(btn);
+      saving[key] = true; setMsg(key, t('saving'));
+      const code = await write(d.id, { status: 'decided', choice: 'done', note: '', decidedAt: new Date().toISOString() });
+      saving[key] = false;
+      if (code) { setMsg(key, failText(code)); if (code === ALREADY) toast(t('alreadyRecorded')); if (readOnly) render(); return; }
+      setMsg(key, '');
+      sendNotice(t('noticeOne', { id: d.id, title: d.title || '', choice: t('didIt'), note: '' }), anchorP);
+    });
+    ui[key].refresh();
+    const steps = asList(d.steps);
+    return el('article', { class: 'action', 'data-id': d.id },
+      el('div', { class: 'meta' }, el('b', null, t(ACTION_KIND[d.actionKind] || 'actOther')),
+        d.where ? el('span', null, '· ' + d.where) : null,
+        d.task ? el('span', null, '· ' + d.task) : null,
+        d.createdAt ? el('span', null, '· ', timeEl(d.createdAt)) : null),
+      el('div', { class: 'action-title' }, d.title || d.id),
+      d.why ? el('p', { class: 'why' }, d.why) : null,
+      steps.length ? el('ol', { class: 'steps' }, steps.map(s => el('li', null, rich(s)))) : null,
+      el('div', { class: 'submit' }, btn, msg));
+  }
+
+  // An `upcoming` card of the decisions collection: what will be asked, not yet open.
+  function upcomingRow(u) {
+    const when = timeEl(u.date || u.createdAt);
+    const label = [u.task, u.label].filter(Boolean).join(' · ');
+    return el('div', { class: 'row', 'data-kind': 'decision', 'data-id': u.id },
+      el('span', null, label ? el('span', { class: 'tag' }, label) : null, label ? ' ' : null, rich(u.text || u.title || u.question || u.id)),
+      el('span', { class: 'row-side' }, t('kindDecision'), when ? ' · ' : null, when));
+  }
+
+  // The view's frame is built once; each render fills it.
+  let dv = null;
+  function frame(root) {
+    if (dv && dv.root === root) return dv;
+    const f = { root };
+    f.waitH = el('h2'); f.waitList = el('div', { class: 'block' }); f.waitEmpty = el('div', { class: 'empty' });
+    f.actH = el('h2'); f.actList = el('div', { class: 'block' }); f.act = el('div', { class: 'block' }, f.actH, f.actList);
+    f.upH = el('h2'); f.upRows = el('div', { class: 'rows' }); f.upEmpty = el('div', { class: 'empty' });
+    f.decSum = el('summary'); f.decMsg = el('div', { class: 'empty', hidden: true }); f.decRows = el('div', { class: 'rows' });
+    f.dec = el('details', { class: 'decided', open: openDetails.has('decided') }, f.decSum, f.decMsg, f.decRows);
+    // Opening the history reads the recorded cards again, every time: a failed read is retried by reopening.
+    f.dec.addEventListener('toggle', () => {
+      if (f.dec.open) { openDetails.add('decided'); loadHistory(); } else openDetails.delete('decided');
+    });
+    put(root, el('div', { class: 'block' }, f.waitH, f.waitList, f.waitEmpty), f.act, el('div', { class: 'block' }, f.upH, f.upRows, f.upEmpty), f.dec);
+    // Typing state: a card being typed in is never rebuilt; once the focus leaves it, what waited is applied.
+    root.addEventListener('compositionstart', () => { composing = true; });
+    root.addEventListener('compositionend', () => { composing = false; });
+    root.addEventListener('focusout', e => {
+      if (!deferred) return;
+      focusOverride = e.relatedTarget || null;
+      try { render(); } finally { focusOverride = null; }
+    });
+    return (dv = f);
+  }
+
+  function renderDecisions(root) {
+    const f = frame(root);
+    deferred = false;
+    const open = decisions.filter(d => d.status === 'open');
+    const cards = open.filter(d => d.kind !== 'action');
+    const actions = open.filter(d => d.kind === 'action');
+    const out = []; const seen = new Set(); const live = new Set();
+    for (const d of cards) {
+      if (d.group) {
+        if (seen.has(d.group)) continue;
+        seen.add(d.group);
+        const members = cards.filter(x => x.group === d.group);
+        const gkey = 'g:' + d.group;
+        const head = members.map(m => ({ id: m.id, task: m.task, groupTitle: m.groupTitle, groupWhy: m.groupWhy }));
+        const block = cached(gkey, head, () => groupBlock(d.group, members));
+        live.add(gkey);
+        const memberNodes = members.map(m => { live.add(m.id); return cached(m.id, m, () => decisionCard(m)); });
+        reconcile(block.__members, memberNodes);
+        out.push(block);
+      } else { live.add(d.id); out.push(cached(d.id, d, () => decisionCard(d))); }
+    }
+    const actionNodes = actions.map(d => { live.add(d.id); return cached(d.id, d, () => actionCard(d)); });
+    for (const k of Array.from(cardCache.keys())) if (!live.has(k)) { cardCache.delete(k); delete ui[k]; }
+    Object.keys(ui).forEach(k => ui[k].refresh());
+
+    f.waitH.textContent = t('waiting');
+    reconcile(f.waitList, out);
+    f.waitList.hidden = !out.length;
+    f.waitEmpty.hidden = !!out.length;
+    f.waitEmpty.textContent = loadError ? t('lostConn', { code: loadError }) : t('noDecisions');
+
+    f.actH.textContent = t('yourAction');
+    reconcile(f.actList, actionNodes);
+    f.act.hidden = !actionNodes.length;
+
+    // Upcoming is the `upcoming` cards of decisions, nothing else. They come in the same
+    // subscription as the open ones, so a failed read is the lost connection said above.
+    const coming = decisions.filter(d => d.status === 'upcoming');
+    f.upH.textContent = t('upcoming');
+    put(f.upRows, coming.map(upcomingRow));
+    f.upRows.hidden = !coming.length;
+    f.upEmpty.hidden = !!coming.length;
+    f.upEmpty.textContent = t('noUpcoming');
+
+    // `recorded` is a decided card already in the task log: shown here like any decided one,
+    // once the history read brought it. The live `decided` cards win over a copy from that read.
+    const liveDecided = decisions.filter(d => d.status === 'decided');
+    const liveIds = new Set(liveDecided.map(d => d.id));
+    const past = history.docs.filter(d => d.status === 'recorded' && !liveIds.has(d.id));
+    const decided = liveDecided.concat(past)
+      .sort((a, b) => String(b.decidedAt || '').localeCompare(String(a.decidedAt || ''))).slice(0, HISTORY_SHOWN);
+    // A count only once the recorded cards are in: before that it would be a false number.
+    f.decSum.textContent = history.state === 'ok' ? t('decidedHead', { n: decided.length }) : t('decidedHeadBare');
+    const hMsg = history.state === 'loading' ? t('loading')
+      : history.state === 'error' ? t('historyError', { code: history.code })
+      : history.state === 'ok' && !decided.length ? t('historyEmpty') : '';
+    f.decMsg.textContent = hMsg;
+    f.decMsg.hidden = !hMsg;
+    f.decMsg.className = history.state === 'error' ? 'empty error' : 'empty';
+    if (history.state === 'error') f.decMsg.setAttribute('role', 'alert'); else f.decMsg.removeAttribute('role');
+    put(f.decRows, decided.map(d => el('div', { class: 'row' },
+      el('span', null, el('b', null, d.title || d.question || d.id), ' — ', t('youChose', { x: choiceLabel(d, d.choice) }), d.note ? ' · ' + d.note : ''),
+      el('span', { class: 'row-side' }, timeEl(d.decidedAt)))));
+    f.decRows.hidden = !decided.length;
+    // Always shown: whether recorded cards exist is known only once the history is opened.
+    f.dec.hidden = false;
+  }
+  // One bounded read of the latest recorded cards, by `decidedAt` — not by `order`, which an
+  // old `legacy-pre-kit` card may not have. Only the latest call's answer is kept.
+  function loadHistory() {
+    if (!db) return;
+    const seq = ++historySeq;
+    history = { state: 'loading', docs: history.docs, code: null };
+    render();
+    Promise.resolve()
+      .then(() => db.collection('decisions').where('status', '==', 'recorded').orderBy('decidedAt', 'desc').limit(HISTORY_SHOWN).get())
+      .then(snap => {
+        if (seq !== historySeq) return;
+        history = { state: 'ok', docs: snap.docs.map(s => Object.assign({ id: s.id }, s.data())), code: null };
+        render();
+      }, e => {
+        if (seq !== historySeq) return;
+        history = { state: 'error', docs: [], code: (e && e.code) || 'error' };
+        render();
+      });
+  }
+
+  // ─── Shell: one view, the decisions ───
+  const app = document.getElementById('app');
+  const eyebrowEl = el('div', { class: 'eyebrow' });
+  const bannerEl = el('div', { class: 'banner', role: 'alert', hidden: true });
+  const panel = el('section', { class: 'view', id: 'view-decisions' }, el('div', { class: 'empty' }, t('loading')));
+  put(app, el('div', { class: 'wrap' },
+    el('header', null, el('div', { class: 'topline' }, eyebrowEl), bannerEl),
+    panel));
+
+  function renderShell() {
+    const name = project.name || '';
+    document.documentElement.setAttribute('lang', lang);
+    document.documentElement.setAttribute('data-page-schema', PAGE_SCHEMA);
+    document.title = name ? name + ' · ' + t('title') : t('title');
+    eyebrowEl.textContent = name ? t('eyebrow', { name }) : t('title');
+    bannerEl.hidden = !projectError;
+    bannerEl.textContent = projectError ? t('projectError', { code: projectError }) : '';
+  }
+  function render() {
+    renderShell();
+    if (db) renderDecisions(panel);
+  }
+  renderShell();
+
+  // ─── Runtime ───
+  (async () => {
+    try { db = window.claude && window.claude.use ? await window.claude.use('db') : null; } catch (e) { db = null; }
+    if (!db) { put(panel, el('div', { class: 'empty' }, t('noDb'))); return; }
+    // A notice waits for this, so a click before it loads is not taken for "no channel".
+    commentsP = Promise.resolve().then(() => window.claude.use('comments')).then(
+      c => { comments = c || null; if (!comments) commentsError = 'unavailable'; return comments; },
+      e => { commentsError = (e && e.code) || 'unavailable'; return null; });
+    try {
+      const user = await window.claude.use('user');
+      if (user && user.can && (await user.can('data.write')) === false) readOnly = true;
+    } catch (e) {}
+    const docs = snap => snap.docs.map(s => Object.assign({ id: s.id }, s.data()));
+    db.doc('meta/project').onSnapshot(s => {
+      project = s.exists ? (s.data() || {}) : {};
+      lang = normLang(project.lang);
+      projectError = null;
+      render();
+    }, err => { projectError = (err && err.code) || 'error'; render(); });
+    db.collection('decisions').where('status', 'in', LIVE_STATUSES).orderBy('order').onSnapshot(snap => {
+      const before = decisions.filter(d => d.status === 'decided').map(d => d.id);
+      decisions = docs(snap); loadError = null;
+      // A decided card that left the subscription was most likely recorded: an open history reads again.
+      const now = new Set(decisions.filter(d => d.status === 'decided').map(d => d.id));
+      if (openDetails.has('decided') && before.some(id => !now.has(id))) loadHistory();
+      render();
+    }, err => { loadError = (err && err.code) || 'error'; render(); });
+  })();
+})();
+</script>

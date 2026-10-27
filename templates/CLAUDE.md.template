@@ -1,0 +1,117 @@
+# {{PROJECT_NAME}} — Agent Operating Rules
+
+This file is the law. The skills in `.claude/skills/` are the procedure that satisfies it. If a skill and this file ever conflict, this file wins.
+
+Procedure lives in skills; this file only states what must hold and what enforces it. Anything here that grows into a paragraph of *how* belongs in a skill instead.
+
+## Who reviews, and how
+
+{{OWNER_NAME}} directs this project. Every checkpoint must produce something reviewable **without reading a diff**: a plain-English task-log entry, a UI walkthrough, an eval scorecard, an explicit chat confirmation. If a step can't be restated in those terms, redesign the step.
+
+Does {{OWNER_NAME}} read code: {{OWNER_READS_CODE}}. The reviewable-artifact bar is the same either way; the answer only decides how much SQL and diff you show alongside it.
+
+## Rules
+
+Every rule names the trigger that runs it and the artifact that proves it ran. A rule missing any of the three columns is a defect that `scripts/check-rule-triggers.mjs` reports and CI blocks on.
+
+| # | Rule | Trigger | Verification |
+|---|---|---|---|
+| R1 | Plan before touching files; no exceptions for "small" | `skill:scope` | blueprint + task file in `tasks/` |
+| R2 | Every session opens by orienting on real state | `skill:open-session` | opening brief in chat |
+| R3 | Progress is written to the tracker as it happens; a task's state is one of the six | `skill:ship` | the task's `status:`, and a green index generation |
+| R4 | Nothing leaves this machine without lint and tests green | `hook:pre-push:{{TEST_COMMAND}}` | hook exit code |
+| R5 | Every push is verified through to a resolved remote state | `skill:ship` | line for that SHA in `logs/deploy-checks.md` |
+| R6 | An unverified push never survives into the next session | `script:scripts/check-deploy-verified.mjs:open-session` | exit code, run by `open-session` |
+| R7 | The session closes with a log, an updated `STATUS.md`, and a commit | `skill:session-log` | `logs/sessions/<YYYY-MM>/session-YYYY-MM-DD.md` + `STATUS.md` |
+| R8 | No secret enters a tracked file, ever | `hook:pre-commit:{{SECRET_SCANNER}}` | hook exit code |
+| R9 | Secret scanning also runs on the remote | `ci:{{SECRET_SCAN_WORKFLOW}}` | job green |
+| R10 | Schema changes are versioned files, never ad hoc SQL | `skill:verify-rls` | migration file in `{{MIGRATIONS_DIR}}` |
+| R11 | Migrations carry schema only, never data | `hook:pre-commit:check-migrations-schema-only` | hook exit code |
+| R12 | Nothing touches production data during development | `skill:build` | sandbox named in the task log |
+| R13 | Every write asserts on its effect, not on absence of error | `skill:verify-tests` | effect assertion named in the task log |
+| R14 | Nothing ships without the verification its change calls for | `skill:verify-tests` | suite green, named in the task log |
+| R15 | Passing verification is not being reviewed — both are required | `skill:code-review` | findings recorded, blocking ones resolved |
+| R16 | A leaked secret is rotated at its source, not just untracked | `owner:{{OWNER_NAME}} rotates at the provider` | confirmation in the task log |
+| R17 | This project's kit copy stays in sync with the source kit | `skill:open-session` | `.ae-kit-version` vs. kit `VERSION` |
+| R18 | The cases a feature must survive are enumerated before it is built | `skill:adversarial` | approved Given-When-Then list in the task log |
+| R19 | No write is assembled inside a component | `skill:build` | the pure function, with its own tests |
+| R20 | The task index is generated from `tasks/`, never hand-edited | `hook:pre-commit:generate-task-index` | hook exit code |
+| R21 | A task explains itself to someone with no history of this project | `skill:scope` | the task file's own sections |
+| R22 | No pending is carried a fourth session without a decision | `script:scripts/check-pendings.mjs:open-session` | exit code, run by `open-session` |
+| R23 | No session works against a kit that has fallen behind | `script:scripts/check-kit-current.mjs:open-session` | exit code, run by `open-session` |
+| R24 | What was learned goes back to the kit at every close, not when someone remembers | `skill:session-log` | the channel's outcome reported: emitted, or declined by consent |
+| R25 | The proof that a push was verified gets committed, not left in the working tree | `skill:open-session` | `logs/deploy-checks.md` with nothing uncommitted |
+| R27 | Every skill names its output as a locatable artifact | `ci:ci.yml:check-skill-outputs` | job green |
+| R28 | A rule in this file names a trigger that exists | `ci:ci.yml:check-rule-triggers` | job green |
+| R29 | A link between two pieces of work points at something that exists, and neither side closes in silence | `hook:pre-commit:check-task-links` | hook exit code |
+| R30 | A business rule is not re-derived inline on a second surface | `ci:ci.yml:check-inline-rules` | job green |
+| R32 | A decision is taken by whoever its class names, in `ae-kit-templates/decision-classes.md` | `owner:{{OWNER_NAME}} counts the questions that reach them` | questions per session, and how many were class B or C |
+| R33 | `STATUS.md` keeps three sections and one table row per decision in force; more than 15 is flagged | `hook:pre-commit:check-status-shape` | hook exit code |
+| R34 | A session log lives in its month's folder, and a link to a log points at something that exists | `hook:pre-commit:check-log-layout` | hook exit code |
+| R35 | Every entry in a task log is of an enumerated type, with its fields, and a link between entries points at something that exists | `hook:pre-commit:check-task-log` | hook exit code |
+| R36 | Every subagent that finishes leaves its prompt and its reply inside the repo | `claude-hook:SubagentStop:collect-subagent.mjs` | `input.md` and `output.md` under `logs/subagents/<YYYY-MM-DD>/` |
+| R38 | A kit file is never edited in this project; a fix the kit does not ship yet lives in Local kit adjustments | `hook:pre-commit:check-local-adjustments` | hook exit code |
+
+**On the gaps in this numbering.** The list is not contiguous: a few numbers belong to rules that govern the kit's own repository and are not something a project does, so they never ship here. The gaps carry no meaning for you. A rule you add takes the next free one, and **a rule that came from this template keeps its number — never renumber one.** Two reasons, and the second is the one that bites: your own logs and task files cite rules by number, and **the kit's skills do too** (`code-review` and `setup` name `R36` when explaining what verifies the subagent-transcript hook). Renumber, and those sentences point at a different rule of yours, or at none — and nothing reports it, because a rule number is prose to every checker here.
+
+**On `owner:` triggers.** An `owner:` trigger declares a step a person runs. `check-rule-triggers.mjs` reports them separately and never counts them as automated. Each one is a standing candidate for a real mechanism.
+
+## Git conventions
+
+- Branch policy: {{BRANCH_POLICY}} — kit default: **isolation follows concurrency, not tasks**. A branch exists because two writers are active at once, not because a task exists.
+- **Delegating is the default, while no class A decision is pending on the work.** Each approved unit is built by a subagent in its own git worktree (`.claude/worktrees/`), on its own branch `ai/<task>-<unit>` — the second writer of the line above. **Before the first delegation, add `.claude/worktrees/` to `.gitignore`** if it is missing, and say so: without it, a `git add -A` while a worktree exists commits a dangling reference to it. The builder stops at `commit`: it builds, verifies and commits its unit, and returns. The main session dispatches `code-review` to a different subagent, integrates into the tracked branch, and reports — and stays free for decisions. **A class A question that comes up while building is returned, not answered**: the builder stops that unit and hands the question back; a class A decision still pending stops only the work that depends on it (`ae-kit-templates/decision-classes.md`). A project that works with a single writer deletes this line and says so in the branch policy above.
+- Commit message format: {{COMMIT_MESSAGE_FORMAT}} — kit default: `feat:` / `fix:` / `chore:` / `refactor:` prefixes, descriptive. Never "update", "changes", "fix".
+- Who pushes: {{PUSH_POLICY}}.
+- Whether a pull request verifies without publishing: read this project's CI and publish/deploy workflows once and write the answer here. `ship` step 6d asks for it rather than re-deriving it per task. Note too that a private repository in a personal GitHub account gets no rulesets and no branch protection — what keeps a push off the tracked branch is this procedure and the local hooks, not the remote.
+- Delivery channel: {{DELIVERY_CHANNEL}}. A push that reaches it is {{OWNER_NAME}}'s call, class A in `ae-kit-templates/decision-classes.md`; any other push is not. If this line names no channel, every push counts as reaching it. `none yet` is a named answer: no push is class A, and creating production is itself an A decision, made before this line changes.
+
+Not re-litigated per task; changing it is a deliberate edit to this file.
+
+## Stack
+
+- Backend/data: {{STACK_BACKEND}} · AI-native logic: {{STACK_AI_NATIVE}} · Frontend: {{STACK_FRONTEND}}
+- Language/type safety: {{STACK_LANGUAGE}} · Testing: {{STACK_TESTING}} · Package manager: {{STACK_PACKAGE_MANAGER}}
+- Suite command: `{{SUITE_COMMAND}}` — the one command that runs every suite this project has, starting from a clean install and build when the project has dependencies or a build step. It is what `build` passes to `integrate-unit.mjs integrate --verify`, inside a unit's worktree; a command chosen in the session is not. It differs from R4's pre-push command on purpose: that one runs in the main checkout on every push and stays fast.
+
+Any field may read "TBD — deferred". Leave it TBD rather than guessing a default: the field gets its real value, and its structure locks activate, the moment that piece is actually introduced. **Introducing a new piece of the stack is itself a setup event** — see `setup/SKILL.md`, which owns that procedure.
+
+## Language
+
+This project's own artifacts — this file, `SETUP_CHECKLIST.md`, `STATUS.md`, task files, scope docs, session logs — are written in **{{PROJECT_LANGUAGE}}**, set during `setup` by asking, never inferred from whatever language a session happens to be held in. Spanish here means Mexican Spanish with full orthography: every accent and diacritic, never stripped.
+
+**The kit stays in English regardless** — skills, scripts, templates, and the output they print. It is shared infrastructure, and one language is what keeps it readable and reviewable. Tool output in English next to project documents in another language is the accepted trade. The one exception is the control center page (`ae-kit-templates/control-center.html`), which carries its texts in English and Spanish and whose language is asked per project the first time it is created.
+
+## Maturity
+
+`maturity:` lives in `STATUS.md` and is changed only by {{OWNER_NAME}}. It governs how much sandbox and eval rigor applies. Never infer or change it.
+
+## Skills
+
+`open-session` opens every session; `session-log` closes it. A session opens by asking {{OWNER_NAME}} what to do, except for tasks they authorized in `STATUS.md` to start without asking (R32). In between, the default sequence for any non-trivial task:
+
+`scope → design → adversarial → build → verify → commit → code-review` **once per unit of work**, then `ship` once
+
+`scope` splits the task into units, one per commit. Everything from `build` onward runs once per unit: build it, verify it, commit it locally, review that commit. `code-review` comes after `commit` because the commit is what gets reviewed, so it has to exist first — **the gate is the push, not the commit.** `ship` runs once per task, when every unit has passed its review with no open blocking findings: it closes the task, pushes, and verifies the remote. Nothing unreviewed reaches the remote, and the whole task goes out in one push at the end.
+
+`adversarial` runs **before** `build`, not after: it produces the list of cases the feature must survive, in plain language, reviewed for gaps by an independent subagent, and {{OWNER_NAME}} receives only the list's class A decisions (the whole list, if that review could not run) — and `build` then implements against that list instead of discovering the unhappy paths in production. Skip it only for a pure copy change or a one-line fix.
+
+`verify` branches: `verify-tests` (always), `verify-evals` (only for non-deterministic model output), `verify-ui` (only if a UI flow is touched), `verify-rls` (only if a table or access policy changes). Each skill's `SKILL.md` states its own trigger, procedure, and — in an `output:` block — the artifact it must produce. **The next skill in a chain checks that artifact exists before it starts.** A skill that cannot name its output as a locatable artifact is under-designed.
+
+## Local kit adjustments
+
+A fix this project needs before the kit ships it is declared here, one row per fix, and the kit's own files are never edited: the next install overwrites them without a word, and `scripts/check-local-adjustments.mjs` blocks the commit that edits one (R38). How to turn an edited kit file into a row, and what each column accepts: `ae-kit-templates/local-adjustments.md`. Keep this the only table under this heading — the checker reads every table here as adjustments.
+
+| What it modifies | How it is applied | Local files | Issue | Date |
+|---|---|---|---|---|
+| — | — | — | — | — |
+
+## Task tracking
+
+**One file per task, in `tasks/`.** `TASKS.md` and `TASKS_ARCHIVE.md` are **generated indexes** — regenerate them, never edit them. Changing a task's state is editing one line of its own frontmatter; nothing moves between files.
+
+A not-yet-started idea is a task file with `status: backlog`; `BACKLOG.md` is the generated index of the tasks in `backlog` and `todo`, and promoting one is changing that status. Anything carried between sessions that isn't a task yet goes in `PENDINGS.md`, with who can close it and how many sessions it has survived. Session logs live in `/logs/`; `STATUS.md` holds current state and references only the most recent one.
+
+
+**Three places, three questions.** The task file says *where the work is going* — status, done-when, open blockers — and is corrected in place. A scope doc in `docs/` says *how it is built* — design, decisions, approved risks — and is corrected in place too, keeping dated decisions marked superseded rather than deleted. The task log, `logs/tasks/<id>.md`, says *what happened* — review rounds, findings, fixes, measurements, decisions, the approved adversarial cases — and only grows; the skills write it with `scripts/task-log-append.mjs`, and `logs/tasks/current/<id>.md` is its generated view. See `ae-kit-templates/task-log-ontology.md`.
+
+This is {{OWNER_NAME}}'s primary review surface; keep it fast to scan.

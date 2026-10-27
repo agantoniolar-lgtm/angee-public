@@ -1,0 +1,106 @@
+---
+id: {{TASK_ID}}
+title: {{TITLE}}
+category: {{CATEGORY}}
+type: {{TYPE}}
+epic: {{EPIC}}
+priority: {{PRIORITY}}
+status: {{STATUS}}
+created: {{YYYY-MM-DD}}
+updated: {{YYYY-MM-DD}}
+---
+
+<!--
+Two optional frontmatter fields carry this task's relationships. Both are lists, both
+are checked by `scripts/check-task-links.mjs` in pre-commit, and both are omitted when
+they have nothing to say — an empty field and an absent one mean the same thing.
+
+  resolves: [P003]      the pendings in PENDINGS.md this task answers (today only
+                        pendings; the model also foresees lessons, once that ledger exists)
+  blocked_by: [T012]    the tasks that have to finish before this one can start. Never
+                        for a file another task also changes: task-units.mjs --plan
+                        settles that before each unit is built, by a single writer too
+
+Why fields and not a sentence in the body: a relationship written in prose is
+invisible the day one side closes. With the field, closing this task while P003 is still
+open is an error the hook reports, and a block that lifts (T012 reaching `done`) is
+reported as a notice by that same hook. Neither closure is ever propagated automatically —
+that would guess your intent. You close the other side, or you remove the field.
+
+One limit worth knowing, stated rather than glossed: the notices (a block lifted, a
+blocker dropped, a pending left without its candidate) are printed by the pre-commit hook,
+which on a normal commit scrolls past. Nothing surfaces them when you open a session yet.
+Until that exists, a lifted block is something you find on your next commit, not something
+that comes looking for you.
+
+`waiting_on:` is separate and required by `status: waiting on owner`: the specific
+question the owner has to answer, not a restatement of the title.
+-->
+
+# {{TASK_ID}} — {{TITLE}}
+
+## What this is
+
+<!--
+Written so someone with no memory of this project can act on it. That is a
+requirement, not a style note: a task that only makes sense to whoever was in the
+room cannot be handed to a subagent, a new collaborator, or yourself in six weeks.
+
+State the problem before the solution. Name the files. Spell out the acronyms once.
+-->
+
+## Why it matters
+
+<!-- What breaks, or stays broken, if this is never done. -->
+
+## Blueprint
+
+<!--
+Written by `scope`: what changes and why, the files it touches, what it could break
+elsewhere, and which `verify-*` skills apply. When `scope` decided this task needs no
+document in `/docs`, one sentence here says so and why — that call is made explicitly,
+never skipped quietly.
+-->
+
+## Done when
+
+<!--
+The task's units of work, one per line, each its own commit. `scope` writes them and
+`code-review` reads them to know what to review:
+
+  - [ ] **U1** — what it delivers, as an observable change
+    - verified by: the suite, check, or execution that says it worked
+    - depends on: the unit that has to land first, or `nothing`
+    - touches: path/one.js, path/two.js
+
+`touches:` is a write contract: the files this unit writes, and the only ones its
+builder may write. One file path per entry, comma-separated — no directory, pattern
+or phrase. In the repo that produces the kit, a file with an installed copy is declared
+with both, and a rename with both names. When the project delegates, `build` reads it
+to decide which units run at once. A builder asks before writing any other file, and
+a class B answer is followed without waiting for the owner (`build` step 1).
+
+A change that cannot be verified on its own is not a unit — fold it into the one it
+belongs with. Nothing in this section is a checkbox but a unit: a decision, an approval
+or a measurement goes in the task log, because a checked line with no commit behind it
+is one `code-review` will look for and never find. Prose around the list is fine.
+-->
+
+## Open blockers
+
+<!--
+BLOCKING review findings not yet resolved, one line each with the id of its task-log
+entry. A line leaves when a `fix` (or an owner's `decision`) resolves it. Empty is normal.
+-->
+
+**Task log:** `logs/tasks/{{TASK_ID}}.md`
+
+<!--
+This file says where the work is going: status, done-when, open blockers, next step.
+It is corrected in place, so it stays short enough to read whole.
+
+What happens along the way — review rounds, findings, fixes, measurements, decisions,
+the approved adversarial cases — goes in the task log above, written with
+`scripts/task-log-append.mjs`. The first entry creates it. Its summary is in
+`logs/tasks/current/{{TASK_ID}}.md`. See `ae-kit-templates/task-log-ontology.md`.
+-->

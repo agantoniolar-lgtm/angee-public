@@ -1,0 +1,45 @@
+# Production migrations log
+
+Append-only record: one row every time a migration from `{{MIGRATIONS_DIR}}` is applied
+to the **production** instance, never the sandbox — the sandbox doesn't need a log, it's
+where free experimentation happens.
+
+If migrations already existed in production before this log was created, don't try to
+reconstruct that history — note the baseline here instead (date, how many, how it was
+confirmed to match what's in `{{MIGRATIONS_DIR}}`) and start the log with the first
+migration pushed to production after that date.
+
+## Procedure before adding a row (see the `verify-rls` skill, section 2, and `CLAUDE.md`)
+
+1. Migration written as a file in `{{MIGRATIONS_DIR}}`, passes `node .claude/skills/verify-rls/scripts/check-migrations-schema-only.mjs` (schema-only, or an explicit, reviewed `-- ALLOW-DML: <reason>`).
+2. Applied to the **sandbox** instance first.
+3. Verified there — if it touches RLS/access, real per-role queries are run (`verify-rls` section 3); if it's a pure schema change, confirmed it doesn't break anything existing.
+4. Explicit confirmation from {{OWNER_NAME}} that it's ready for production — never automatic, never triggered by a merge or a push.
+5. Applied to production, and **at that same moment** (not after) the row below is added.
+
+## Log — schema migrations
+
+| date | migration | applied by | verified in sandbox | {{OWNER_NAME}} confirmed | notes |
+|---|---|---|---|---|---|
+
+---
+
+## Log — serverless/edge function deploys
+
+**Why this section exists.** A deploy pipeline that rebuilds the app on push usually does **not** redeploy serverless functions. So a change to one can sit merged in the repo indefinitely while production keeps running the old code, and **nothing signals the gap** — the repo looks correct and production disagrees. That happened for four days on the project this kit was hardened against, and it's what created this section.
+
+**Compare deployed code by content hash, never by version number.** Two environments can sit at different version numbers with byte-identical code, simply because one was deployed more times. A function believed to be diverged turned out to be identical; only the hash settles it.
+
+| date | function | env | content hash | deployed by | {{OWNER_NAME}} confirmed | notes |
+|---|---|---|---|---|---|---|
+
+---
+
+## Log — one-off data scripts against production
+
+**Why this section exists.** Migrations are schema only (`CLAUDE.md` → the migrations rule). A one-time data fix therefore lives **outside** the versioned migrations folder — which meant, until this section existed, that a mass `UPDATE` or `DELETE` against real rows left **no trace anywhere**. Schema changes were logged and data changes were not, even though data changes are the ones you cannot roll back with a re-run.
+
+Every script that touches production rows gets a row here, at the moment it runs. Keep a reversible backup where the operation allows one, and say in `notes` where it lives.
+
+| date | script | rows affected | backup taken | {{OWNER_NAME}} confirmed | notes |
+|---|---|---|---|---|---|

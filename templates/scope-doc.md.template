@@ -1,0 +1,51 @@
+# Scope — {{Feature title}}
+
+**Fecha:** {{YYYY-MM-DD}}
+**Task:** {{task id in TASKS.md, and/or a link to the kanban/tracker card}}
+**Relacionado:** {{other docs this depends on or feeds — e.g. the PRD this scope belongs under, another scope doc it touches}}
+
+---
+
+## 1. Problema
+<!-- What's broken or missing today, in plain terms, and why this matters now. Ground it in something observed — a real gap, a real complaint, a real risk seen in the project — not a hypothetical. -->
+
+## 2. Cómo funciona hoy
+<!-- Current-state analysis. Verify against the real code/schema/access policies, not just an existing doc — docs go stale. If an existing doc contradicts what the code or the database actually does, say so explicitly and note which one you trusted and why. Anchor claims with concrete references: file paths, table names, policy names — not vague description. -->
+
+## 3. Hallazgos
+<!-- Anything found while scoping that changes the picture: gaps, stale docs, unexpected dependencies, something that only became visible by reading the real code. Mark anything that blocks the build with ⚠️. Use a table when comparing several files, policies, or pieces side by side — it's easier to review than prose. -->
+
+## 4. Propuesta
+<!-- The proposed change, broken into pieces. For each piece: what changes, exactly which files/tables/policies, and why this is the right shape — not just what it is. -->
+
+## 5. Decisiones
+**Resueltas ({{fecha}}, {{quién}}):**
+- {{decision}} — {{one line on why, if not obvious}}
+
+**Pendientes:**
+- {{decision}} — {{does this block the whole doc, or just one piece? say which}}
+
+## 6. Fuera de alcance
+<!-- Explicit non-goals — adjacent things this doc will NOT do. If the excluded thing already has its own task or doc, point to it; if it doesn't yet, say it needs one rather than silently dropping it. -->
+
+## 7. Plan de ejecución
+<!-- Ordered, concrete checklist of build steps once this doc is approved. This is what `build` follows step by step. -->
+1. {{step}}
+2. {{step}}
+
+<!--
+Optional — only include this section if the feature is complex enough to benefit from a few independently checkable sub-builds instead of one pass. If included, stage each row as its own task file in `tasks/` per the scope skill's step 5 — delete this whole block (including the comment) if the feature doesn't need it and go straight from §7's checklist to build.
+
+## 7a. Fases
+| Fase | Qué entrega | Depende de | Verificación |
+|---|---|---|---|
+| 1 | {{deliverable}} | — | {{verify-* skills}} |
+| 2 | {{deliverable}} | Fase 1 | {{verify-* skills}} |
+-->
+
+## 8. Siguiente paso
+<!-- What happens the moment this doc is approved — usually a pointer to the standard scope → design → adversarial → build → verify → commit → code-review flow, run once per unit of work, with ship once at the end, naming which of those apply here. -->
+
+<!--
+If this feature involves live iteration (prompt/rubric tuning, repeated live tests against real or synthetic cases), don't create a new file per round. Append a new dated, numbered section to the bottom of this same doc each time instead ("## 9. Primer test en vivo (YYYY-MM-DD)", "## 10. Segundo test en vivo …") so the full history of what was tried, what broke, and what was decided stays in one place, in order. This is a deliberate, common pattern in this project's own scope docs — not a fallback.
+-->

@@ -1,0 +1,14 @@
+# Backlog — {{PROJECT_NAME}}
+
+<!-- Este archivo se GENERA. No lo edites a mano: corre `scripts/generate-task-index.mjs`
+     y el contenido saldrá de los archivos de tasks/. Esta plantilla existe sólo para que
+     el archivo exista antes de la primera corrida, en un proyecto recién instalado. -->
+
+Trabajo anotado que todavía no empieza. Cada fila enlazará al archivo de su task — **el contenido vive ahí, no aquí**: este archivo es un índice, igual que `TASKS.md`.
+
+Anotar una idea es crear `tasks/<id>.md` con `status: backlog` y regenerar. No hay filas que mover después: promoverla es cambiar esa palabra por `todo` (scope escrito, esperando turno) o por `in progress`. El id no cambia nunca, así que ningún enlace escrito a esa task se rompe al promoverla.
+
+**La diferencia con `PENDINGS.md`, que es lo que decide dónde va cada cosa:** a una task de backlog le falta **tiempo**; a un pendiente le falta una **decisión**. El tiempo resuelve la primera y empeora el segundo — por eso una se lista y el otro se cuenta.
+
+| id | title | category | status | updated |
+|---|---|---|---|---|

@@ -1,0 +1,29 @@
+# Copy this file to .github/workflows/gitleaks.yml at the project root (create
+# .github/workflows/ if it doesn't exist; merge in if other workflows already exist there).
+#
+# This is the CI backstop, not a replacement for the local pre-commit hook — the hook
+# catches a secret before it's committed at all; this catches anything that slipped past
+# the hook (unhooked clone, --no-verify, a direct push) and shows up as a visible pass/fail
+# check on the PR, so it's something reviewable without reading code.
+#
+# Licensing: free, no key needed, if this repo belongs to a personal GitHub account.
+# If it belongs to a GitHub Organization, get a free license from gitleaks.io and store
+# it as a repo secret named GITLEAKS_LICENSE — or swap gitleaks/gitleaks-action@v3 for
+# gacts/gitleaks@v1 below, which never requires a license key either way.
+
+name: gitleaks
+
+on: [push, pull_request]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Only needed if this repo belongs to a GitHub Organization, not a personal account:
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}

@@ -1,0 +1,15 @@
+# Pendings
+
+Everything carried between sessions that isn't a task yet. `session-log` updates the mention count at the end of every session; `open-session` reads it at the start of the next one. `scripts/check-pendings.mjs` escalates anything that crosses three mentions.
+
+**Columns.** `owner` is who can actually close it — `system` (the project can do it), `project-owner` (needs a decision or an action only the owner can take), `third-party` (waiting on someone outside the project). `state` is `open`, `escalated`, `resolved`, or `dropped` — and `dropped` requires a written reason. `notes` is free text: where a decision stands, who was asked, why it is still here. It is optional and it is the last column, so a six-column board written before this existed still reads correctly.
+
+**Two conventions, and the reason for both.** A working note goes in the `notes` column — **never in an HTML comment**. And a pending is retired by setting its `state`, **never by hiding its row**: the row stays in the table. Both exist because the counter reads this file line by line, and a row it cannot see is a decision nobody signed. Anything the counter is told to ignore is a place where a pending can quietly stop being counted.
+
+| id | pending | owner | first raised | mentions | state | notes |
+|---|---|---|---|---|---|---|
+| P001 | {{what is pending}} | {{system/project-owner/third-party}} | {{YYYY-MM-DD}} | 1 | open | {{where it stands}} |
+
+## Dropped, on purpose
+
+A pending abandoned without a decision is indistinguishable, six weeks later, from one nobody ever thought of. Set its `state` to `dropped` above and write the date and the reason here.

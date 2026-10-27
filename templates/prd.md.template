@@ -1,0 +1,63 @@
+# PRD — {{Product or epic title}}
+
+- **Task:** {{id}}
+- **Autor:** {{who}}
+- **Creado:** {{YYYY-MM-DD}}
+- **Estado:** {{borrador | activo | cerrado}} — {{if borrador, one line on what's still blocking}}
+- **Docs relacionados:** {{scope docs this PRD will host or already hosts, other PRDs, prior art}}
+
+---
+
+## 1. Problema
+<!-- Scoping question: what's failing or missing right now, evidenced concretely — not a hypothetical? This is the foundation everything else in this doc rests on; don't let it be vague. -->
+
+## 2. Objetivo
+<!-- Scoping question: what does success look like, and for whom? One or two sentences, plain English. -->
+
+## 3. No-objetivos
+<!-- Scoping question: what's explicitly out of scope for THIS doc — adjacent asks that will not be addressed here? If something adjacent deserves its own task, say so rather than silently folding it in or silently dropping it. -->
+
+## 4. Principio rector (opcional)
+<!-- Only if there's a real, already-identified failure mode or design principle this must protect against — e.g. a risk already seen elsewhere in this project. Delete this section entirely if there isn't a real one; don't invent one just to fill it. -->
+
+## 5. Modelo de datos (propuesto)
+<!-- Only if this touches the data model. Propose tables/columns/RLS here, verified against the real current schema — not assumed from a doc that might be stale. Note the RLS/access model explicitly; it gets verified with verify-rls before UI work starts, same as any other scope. Delete this whole section if not applicable. -->
+
+## 6. Fases
+<!--
+Scoping question, answered: what's the natural stage breakdown? This is the payoff of having worked through §1-3 first — don't draft this section before those are settled.
+
+Each fase should:
+- stand on its own — ship real value, be independently verifiable and committable
+- be sequenced to de-risk the riskiest or most foundational piece first
+- name its gate explicitly if it isn't purely sequential: a pending decision (link the §7 item), an external dependency, another task's completion
+
+Stage each fase substantial enough to build/verify on its own as its own task file in `tasks/` per the scope skill's step 5, rather than one task for the whole PRD.
+-->
+
+### Phase 0 — Scope + decisions (this doc)
+Close the blocking decisions in §7 before starting Phase 1.
+
+### Fase 1 — {{title}}
+- {{what it delivers}}
+- Verificación: {{which verify-* skills, and what "passing" means here}}
+
+### Fase 2 — {{title}}
+- {{what it delivers}}
+- Verificación: {{which verify-* skills}}
+
+## 7. Decisiones
+**Resueltas ({{fecha}}, {{quién}}):**
+- {{decision}} — {{one line on why, if not obvious}}
+
+**Pendientes:**
+- {{decision}} — blocks {{which phase specifically, not just "the doc"}}
+
+## 8. Plan de verificación (resumen)
+| Fase | verify-rls | verify-tests | verify-ui | verify-evals |
+|---|---|---|---|---|
+| 1 | | | | |
+| 2 | | | | |
+
+## 9. Dependencias y relaciones
+<!-- What this depends on or relates to elsewhere in the project — other tasks, other docs, existing code this expands rather than replaces. Say explicitly when a fase is gated by something outside this doc (another task, a convention that doesn't exist yet) so that gate is traceable back from §6/§7. -->

@@ -1,0 +1,36 @@
+# Project status — {{PROJECT_NAME}}
+
+maturity: {{prototype | pre-users | live-users}}
+
+<!--
+Only {{OWNER_NAME}} changes the maturity field above, and only when the project's real-world status actually changes.
+Every skill reads this field to decide how much sandbox and eval rigor to apply. See CLAUDE.md.
+
+This file has exactly three sections, and scripts/check-status-shape.mjs rejects anything else.
+session-log replaces "Next session" and "Last session" at every close: the previous session lives only in its log.
+-->
+
+## Next session
+
+{{what comes next, in priority order}}
+
+<!--
+Tasks authorized to start without asking go under a "### Authorized to start without asking" subsection,
+only in {{OWNER_NAME}}'s own words. Each one names its list of steps, and every decision it needs is already
+approved. A task with a pending decision is not authorized. See ae-kit-templates/decision-classes.md.
+-->
+
+## Last session ({{YYYY-MM-DD}})
+
+{{one short paragraph: what got done, and the path to the session log}}
+
+## Decisions
+
+<!--
+One row per decision still in force, at most 15. The reason lives in the file Detail points to, not here.
+"Enforced by" names the mechanism or the kit file that carries it, or says nothing does yet.
+session-log retires a row to docs/decisions-archive.md, in this same table, once a mechanism enforces it or
+the kit adopted it, and drops a row the facts overtook.
+-->
+| Decision | Date | Enforced by | Detail |
+|---|---|---|---|
